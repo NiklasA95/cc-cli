@@ -1,0 +1,33 @@
+{
+    "tasticType": "clickconcepts/product/product-reviews",
+    "name": "Product Reviews",
+    "icon": "star_rate",
+    "category": "Clickconcepts",
+    "schema": [
+        {
+            "name": "Margin",
+            "fields": [
+                {
+                    "type": "description",
+                    "text": "Wenn ausgewählt, hat das Tastic eine standardisierten Abstand nach oben."
+                },
+                {
+                    "label": "Standard Margin Top",
+                    "field": "stdMarginTop",
+                    "type": "boolean",
+                    "default": true
+                },
+                {
+                    "type": "description",
+                    "text": "Wenn ausgewählt, hat das Tastic eine standardisierten Abstand nach unten."
+                },
+                {
+                    "label": "Standard Margin Bottom",
+                    "field": "stdMarginBottom",
+                    "type": "boolean",
+                    "default": true
+                }
+            ]
+        }
+    ]
+}
