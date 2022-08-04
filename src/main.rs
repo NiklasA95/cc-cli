@@ -1,6 +1,6 @@
 #![allow(unused)]
 
-use anyhow::{Context, Result};
+use anyhow::{bail, Context, Result};
 use clap::Parser;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -25,6 +25,25 @@ struct Schema {
 #[derive(Serialize, Deserialize)]
 struct SchemaGroup {
     fields: Vec<HashMap<String, Value>>,
+}
+
+fn validate_schema_group_field(schema_item: &HashMap<String, Value>) -> Result<()> {
+    if !schema_item.contains_key("type") {
+        if !schema_item.contains_key("field") {
+            bail!("Schema field is missing required key `type`")
+        }
+
+        bail!(
+            "Schema field `{}` is missing required key `type`",
+            schema_item["field"].as_str().unwrap()
+        );
+    }
+
+    if schema_item["type"] != "description" && !schema_item.contains_key("field") {
+        bail!("Schema contains field without required key `field`");
+    }
+
+    Ok(())
 }
 
 fn main() -> Result<()> {
@@ -65,7 +84,16 @@ fn main() -> Result<()> {
 
     for schema_group in schema.schema {
         for schema_item in schema_group.fields {
+            validate_schema_group_field(&schema_item)?;
+
             if schema_item["type"] != "description" {
+                // TODO: Add `enum` to types
+                let value_type = match schema_item["type"].as_str().unwrap() {
+                    "string" | "markdown" => "control: \"text\", ",
+                    "boolean" => "control: \"boolean\", ",
+                    _ => "table: { disable: true }, ",
+                };
+
                 let mut default_value = String::from("");
 
                 if schema_item.contains_key("default") {
@@ -83,9 +111,11 @@ fn main() -> Result<()> {
                     }
                 };
 
+                // TODO: Add `category` & `description` as arg_types
                 let arg_type = format!(
-                    "    {}: {{ {}table: {{ disable: true }} }},\n",
+                    "    {}: {{ {}{} }},\n",
                     schema_item["field"].as_str().unwrap(),
+                    value_type,
                     default_value
                 );
                 arg_types += arg_type.as_str();
