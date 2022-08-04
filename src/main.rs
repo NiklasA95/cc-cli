@@ -8,7 +8,7 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::io::{BufReader, Write};
 
-/// Convert a frontastic component schema to storybook story file.
+/// Convert a frontastic component schema to a storybook story file.
 #[derive(Parser)]
 struct Cli {
     /// The path to the file to convert
