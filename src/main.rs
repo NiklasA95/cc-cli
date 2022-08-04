@@ -66,9 +66,27 @@ fn main() -> Result<()> {
     for schema_group in schema.schema {
         for schema_item in schema_group.fields {
             if schema_item["type"] != "description" {
+                let mut default_value = String::from("");
+
+                if schema_item.contains_key("default") {
+                    match &schema_item["default"] {
+                        Value::String(default) => {
+                            default_value = format!("defaultValue: \"{}\", ", default)
+                        }
+                        Value::Bool(default) => {
+                            default_value = format!("defaultValue: {}, ", default)
+                        }
+                        Value::Number(default) => {
+                            default_value = format!("defaultValue: {}, ", default)
+                        }
+                        _ => (),
+                    }
+                };
+
                 let arg_type = format!(
-                    "    {}: {{ table: {{ disable: true }} }},\n",
-                    schema_item["field"].as_str().unwrap()
+                    "    {}: {{ {}table: {{ disable: true }} }},\n",
+                    schema_item["field"].as_str().unwrap(),
+                    default_value
                 );
                 arg_types += arg_type.as_str();
             }
