@@ -1,3 +1,7 @@
-# schema-convert
+# cc-cli
 
-Convert a frontastic component schema to a storybook story file.
+Command line tool for automating internal workflows of the company Clickconcepts
+
+## Features:
+
+- convert a frontastic component schema to a storybook story file.
