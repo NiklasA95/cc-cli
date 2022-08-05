@@ -4,4 +4,4 @@ Command line tool for automating internal workflows for the Clickconcepts fronte
 
 ## Features:
 
-- convert a frontastic component schema to a storybook story file.
+- build a storybook story file out of a frontastic component schema
