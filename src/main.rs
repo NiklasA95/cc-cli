@@ -1,5 +1,6 @@
 use anyhow::{Context, Error, Result};
 use clap::Parser;
+use convert_case::{Case, Casing};
 use serde::Deserialize;
 use serde_json::Value;
 use std::fs::File;
@@ -51,14 +52,10 @@ fn deserialize_file_content(file_path: &PathBuf) -> Result<Schema, Error> {
 }
 
 fn create_component_name_and_file(name: String) -> Result<(String, File), Error> {
-    let name = if name.contains(' ') {
-        name.replace(' ', "")
-    } else {
-        name
-    };
+    let name = name.replace('/', " ").to_case(Case::Pascal);
     let file_name = format!("{}.stories.tsx", name);
     let file = File::create(&file_name)
-        .with_context(|| format!("could not create file `{}`", file_name))?;
+        .with_context(|| "could not create file for name provided in schema")?;
 
     Ok((name, file))
 }
@@ -104,7 +101,11 @@ fn main() -> Result<()> {
                         )
                     }
                     "number" => format!(
-                        "control: \"number\",, table: {{ category: \"{}\" }}, ",
+                        "control: \"number\", table: {{ category: \"{}\" }}, ",
+                        schema_group.name
+                    ),
+                    "enum" => format!(
+                        "control: \"radio\", table: {{ category: \"{}\" }}, ",
                         schema_group.name
                     ),
                     _ => String::from("table: { disable: true }, "),
