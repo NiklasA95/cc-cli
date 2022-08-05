@@ -1,103 +1,119 @@
-#![allow(unused)]
-
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Error, Result};
 use clap::Parser;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use serde_json::Value;
-use std::collections::HashMap;
 use std::fs::File;
 use std::io::{BufReader, Write};
+use std::path::PathBuf;
 
 /// Convert a frontastic component schema to a storybook story file.
 #[derive(Parser)]
 struct Cli {
-    /// The path to the file to convert
+    /// The path of the file to convert
     #[clap(parse(from_os_str))]
-    file_path: std::path::PathBuf,
+    file_path: PathBuf,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Deserialize)]
 struct Schema {
     name: String,
     schema: Vec<SchemaGroup>,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Deserialize)]
 struct SchemaGroup {
-    fields: Vec<HashMap<String, Value>>,
+    name: String,
+    fields: Vec<SchemaItem>,
+}
+#[derive(Deserialize)]
+struct SchemaItem {
+    #[serde(rename(deserialize = "type"))]
+    type_: String,
+    field: Option<String>,
+    default: Option<Value>,
+    text: Option<String>,
 }
 
-fn validate_schema_group_field(schema_item: &HashMap<String, Value>) -> Result<()> {
-    if !schema_item.contains_key("type") {
-        if !schema_item.contains_key("field") {
-            bail!("Schema field is missing required key `type`")
-        }
-
-        bail!(
-            "Schema field `{}` is missing required key `type`",
-            schema_item["field"].as_str().unwrap()
-        );
-    }
-
-    if schema_item["type"] != "description" && !schema_item.contains_key("field") {
-        bail!("Schema contains field without required key `field`");
-    }
-
-    Ok(())
-}
-
-fn main() -> Result<()> {
-    let args = Cli::parse();
-
-    let file = File::open(&args.file_path)
-        .with_context(|| format!("could not read file `{}`", &args.file_path.display()))?;
+fn deserialize_file_content(file_path: &PathBuf) -> Result<Schema, Error> {
+    let file = File::open(file_path)
+        .with_context(|| format!("could not read file `{}`", file_path.display()))?;
 
     let reader = BufReader::new(file);
 
     let schema: Schema = serde_json::from_reader(reader).with_context(|| {
         format!(
-            "could not serialize json from file `{}`",
-            &args.file_path.display()
+            "could not deserialize json from file `{}`",
+            file_path.display()
         )
     })?;
 
-    let name = if schema.name.contains(' ') {
-        schema.name.replace(' ', "")
+    Ok(schema)
+}
+
+fn create_component_name_and_file(name: String) -> Result<(String, File), Error> {
+    let name = if name.contains(' ') {
+        name.replace(' ', "")
     } else {
-        schema.name
+        name
     };
     let file_name = format!("{}.stories.tsx", name);
-    let mut file = File::create(&file_name)
-        .with_context(|| format!("could not create file `{}`", &file_name))?;
+    let file = File::create(&file_name)
+        .with_context(|| format!("could not create file `{}`", file_name))?;
+
+    Ok((name, file))
+}
+
+fn main() -> Result<()> {
+    let args = Cli::parse();
+
+    let schema = deserialize_file_content(&args.file_path)?;
+
+    let (name, mut file) = create_component_name_and_file(schema.name)?;
 
     let basic_imports  = String::from("import React from \"react\";\nimport { Story, Meta } from \"@storybook/react\";\nimport { documentationPath } from \"@srcDS/storybook/constants\";\n\n");
     let component_import = format!(
-        "import {}, {{\n  I{},\n}} from \"@srcDS/components/organisms/{}\";\n\n",
+        "import {}, {{\n    I{},\n}} from \"@srcDS/components/organisms/{}\";\n\n",
         name, name, name
     );
     let meta_header = format!(
-        "export default {{\n  component: {},\n  title: `${{documentationPath}}/{}`,\n  ",
+        "export default {{\n    component: {},\n    title: `${{documentationPath}}/{}`,\n    ",
         name, name
     );
 
     let mut arg_types = String::from("argTypes: {\n");
 
+    let mut description_cache = None;
+
     for schema_group in schema.schema {
         for schema_item in schema_group.fields {
-            validate_schema_group_field(&schema_item)?;
-
-            if schema_item["type"] != "description" {
+            if let Some(description) = schema_item.text {
+                description_cache = Some(format!("description: \"{}\", ", description));
+            } else {
                 // TODO: Add `enum` to types
-                let value_type = match schema_item["type"].as_str().unwrap() {
-                    "string" | "markdown" => "control: \"text\", ",
-                    "boolean" => "control: \"boolean\", ",
-                    _ => "table: { disable: true }, ",
+                let value_type = match schema_item.type_.as_str() {
+                    "string" | "markdown" => {
+                        format!(
+                            "control: \"text\", table: {{ category: \"{}\" }}, ",
+                            schema_group.name
+                        )
+                    }
+                    "boolean" => {
+                        format!(
+                            "control: \"boolean\", table: {{ category: \"{}\" }}, ",
+                            schema_group.name
+                        )
+                    }
+                    "number" => format!(
+                        "control: \"number\",, table: {{ category: \"{}\" }}, ",
+                        schema_group.name
+                    ),
+                    _ => String::from("table: { disable: true }, "),
                 };
 
                 let mut default_value = String::from("");
 
-                if schema_item.contains_key("default") {
-                    match &schema_item["default"] {
+                if let Some(default) = schema_item.default {
+                    match default {
                         Value::String(default) => {
                             default_value = format!("defaultValue: \"{}\", ", default)
                         }
@@ -111,21 +127,29 @@ fn main() -> Result<()> {
                     }
                 };
 
-                // TODO: Add `category` & `description` as arg_types
+                let description: String = if let Some(description) = &description_cache {
+                    description.to_string()
+                } else {
+                    String::from("")
+                };
+
+                description_cache = None;
+
                 let arg_type = format!(
-                    "    {}: {{ {}{} }},\n",
-                    schema_item["field"].as_str().unwrap(),
+                    "        {}: {{ {}{}{}}},\n",
+                    schema_item.field.unwrap(),
                     value_type,
-                    default_value
+                    default_value,
+                    description
                 );
                 arg_types += arg_type.as_str();
             }
         }
     }
 
-    let meta_footer = "  },\n} as Meta;\n\n";
+    let meta_footer = "    },\n} as Meta;\n\n";
 
-    let story_template = format!("//TODO: Wrap component with decorators if needed\nconst StoryTpl: Story<I{}> = (args) => <{} {{...args}} />;\n\n", name, name);
+    let story_template = format!("// TODO: Wrap component with decorators if needed\nconst StoryTpl: Story<I{}> = (args) => <{} {{...args}} />;\n\n", name, name);
 
     let default_story = format!("export const DefaultStory = StoryTpl.bind({{}});\nDefaultStory.storyName = \"Default {}\";\nDefaultStory.args = {{}};\n", name);
 
