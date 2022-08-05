@@ -33,6 +33,12 @@ struct SchemaItem {
     field: Option<String>,
     default: Option<Value>,
     text: Option<String>,
+    values: Option<Vec<EnumValue>>,
+}
+#[derive(Deserialize)]
+struct EnumValue {
+    value: String,
+    name: String,
 }
 
 fn deserialize_file_content(file_path: &PathBuf) -> Result<Schema, Error> {
@@ -86,7 +92,7 @@ fn main() -> Result<()> {
             if let Some(description) = schema_item.text {
                 description_cache = Some(format!("description: \"{}\", ", description));
             } else {
-                // TODO: Add `enum` to types
+                // TODO: Add `media` and `group` to types
                 let value_type = match schema_item.type_.as_str() {
                     "string" | "markdown" => {
                         format!(
@@ -136,10 +142,22 @@ fn main() -> Result<()> {
 
                 description_cache = None;
 
+                let enum_values: String = if let Some(values) = schema_item.values {
+                    let mut enum_values = String::from("options: {");
+                    for item in values {
+                        enum_values += format!("{}: \"{}\", ", &item.name, &item.value).as_str();
+                    }
+                    enum_values += "}, ";
+                    enum_values
+                } else {
+                    String::from("")
+                };
+
                 let arg_type = format!(
-                    "        {}: {{ {}{}{}}},\n",
+                    "        {}: {{ {}{}{}{}}},\n",
                     schema_item.field.unwrap(),
                     value_type,
+                    enum_values,
                     default_value,
                     description
                 );
