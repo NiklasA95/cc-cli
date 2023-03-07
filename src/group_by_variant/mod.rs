@@ -27,17 +27,17 @@ struct LineItemEdges {
     edges: Vec<LineItemNode>,
 }
 
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Deserialize, Clone)]
 struct LineItemNode {
     node: LineItem,
 }
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Deserialize, Clone)]
 struct LineItem {
     sku: String,
     product: Product,
 }
 
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Deserialize, Clone)]
 struct Product {
     #[serde(rename(deserialize = "legacyResourceId"))]
     id: String,
@@ -62,14 +62,14 @@ pub async fn group_by_variant(file_path: &PathBuf) -> Result<(), Error> {
                 .filter(|item| item.node.product.id == product_id)
                 .collect();
 
-        let sku = line_items[0].node.sku.clone();
+        let sku = &line_items[0].node.sku;
 
-        if let Some(reviews) = variant_reviews.get_mut(&sku) {
+        if let Some(reviews) = variant_reviews.get_mut(sku) {
             reviews.push(item.0);
             continue;
         } else {
             let reviews: Vec<String> = vec![item.0];
-            variant_reviews.insert(sku, reviews);
+            variant_reviews.insert(sku.to_string(), reviews);
         }
     }
 
