@@ -65,10 +65,10 @@ pub async fn group_by_variant(file_path: &PathBuf) -> Result<(), Error> {
         let sku = line_items[0].node.sku.clone();
 
         if let Some(reviews) = variant_reviews.get_mut(&sku) {
-            reviews.push(item.1);
+            reviews.push(item.0);
             continue;
         } else {
-            let reviews: Vec<String> = vec![item.1];
+            let reviews: Vec<String> = vec![item.0];
             variant_reviews.insert(sku, reviews);
         }
     }
